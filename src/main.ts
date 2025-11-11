@@ -1,29 +1,34 @@
 // @deno-types="npm:@types/leaflet"
 import leaflet from "leaflet";
-
-// Style sheets
 import "leaflet/dist/leaflet.css";
 import "./style.css";
-
-// Fix missing marker images
 import "./_leafletWorkaround.ts";
+import luck from "./_luck.ts";
 
-// Our classroom location
-const CLASSROOM_LATLNG = leaflet.latLng(
-  36.997936938057016,
-  -122.05703507501151,
-);
+// ------------------- Basic UI Setup -------------------
+const controlPanelDiv = document.createElement("div");
+controlPanelDiv.id = "controlPanel";
+document.body.append(controlPanelDiv);
 
-// === Gameplay constants (Phase 1 uses only TILE_DEGREES) ===
-const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 1e-4;
-
-// UI containers
 const mapDiv = document.createElement("div");
 mapDiv.id = "map";
 document.body.append(mapDiv);
 
-// Leaflet map
+const statusPanelDiv = document.createElement("div");
+statusPanelDiv.id = "statusPanel";
+document.body.append(statusPanelDiv);
+
+// ------------------- Game Parameters -------------------
+const CLASSROOM_LATLNG = leaflet.latLng(
+  36.997936938057016,
+  -122.05703507501151,
+);
+const GAMEPLAY_ZOOM_LEVEL = 19;
+const TILE_DEGREES = 1e-4;
+const NEIGHBORHOOD_SIZE = 3; // Nearby cells to show values
+const CACHE_SPAWN_PROBABILITY = 0.1;
+
+// ------------------- Map Setup -------------------
 const map = leaflet.map(mapDiv, {
   center: CLASSROOM_LATLNG,
   zoom: GAMEPLAY_ZOOM_LEVEL,
@@ -33,7 +38,6 @@ const map = leaflet.map(mapDiv, {
   scrollWheelZoom: false,
 });
 
-// Background tile layer
 leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -42,70 +46,131 @@ leaflet
   })
   .addTo(map);
 
-// Player marker
-const playerMarker = leaflet.marker(CLASSROOM_LATLNG);
-playerMarker.bindTooltip("That's you!");
+const playerMarker = leaflet.marker(CLASSROOM_LATLNG).bindTooltip(
+  "That's you!",
+);
 playerMarker.addTo(map);
 
-//
-// =============== PHASE 1 IMPLEMENTATION ===============
-// Grid rendering across entire map viewport
-//
+let playerPoints = 0;
+statusPanelDiv.innerHTML = "No points yet...";
 
-// Convert lat/lng → grid cell indices
-function latLngToCell(lat: number, lng: number) {
-  const i = Math.floor((lat - CLASSROOM_LATLNG.lat) / TILE_DEGREES);
-  const j = Math.floor((lng - CLASSROOM_LATLNG.lng) / TILE_DEGREES);
-  return { i, j };
+// ------------------- Token Definitions -------------------
+type Token = {
+  value: number;
+  i: number;
+  j: number;
+};
+const tokensMap = new Map<string, Token>();
+
+function getTokenForCell(i: number, j: number): Token | null {
+  const key = `${i},${j}`;
+  if (tokensMap.has(key)) return tokensMap.get(key)!;
+
+  const spawnChance = luck([i, j, "initialValue"].toString());
+  if (spawnChance < CACHE_SPAWN_PROBABILITY) {
+    const value = 1 << Math.floor(luck([i, j, "tokenValue"].toString()) * 4);
+    const token: Token = { value, i, j };
+    tokensMap.set(key, token);
+    return token;
+  }
+  return null;
 }
 
-// Convert cell index → rectangular bounds
-function cellBounds(i: number, j: number) {
-  const o = CLASSROOM_LATLNG;
-  return leaflet.latLngBounds([
-    [o.lat + i * TILE_DEGREES, o.lng + j * TILE_DEGREES],
-    [o.lat + (i + 1) * TILE_DEGREES, o.lng + (j + 1) * TILE_DEGREES],
-  ]);
-}
+// ------------------- Dynamic Grid Rendering -------------------
+const cellLayers = new Map<string, leaflet.Layer>();
 
-// Draw grid cells visible in current viewport
-function drawVisibleGrid() {
-  // Remove previous grid rectangles
-  gridLayer.clearLayers();
-
+function renderGrid() {
   const bounds = map.getBounds();
+  const minI = Math.floor(
+    (bounds.getSouth() - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
+  );
+  const maxI = Math.ceil(
+    (bounds.getNorth() - CLASSROOM_LATLNG.lat) / TILE_DEGREES,
+  );
+  const minJ = Math.floor(
+    (bounds.getWest() - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
+  );
+  const maxJ = Math.ceil(
+    (bounds.getEast() - CLASSROOM_LATLNG.lng) / TILE_DEGREES,
+  );
 
-  // Convert visible lat/lng edges to cell ranges
-  const nw = latLngToCell(bounds.getNorth(), bounds.getWest());
-  const se = latLngToCell(bounds.getSouth(), bounds.getEast());
+  for (let i = minI; i <= maxI; i++) {
+    for (let j = minJ; j <= maxJ; j++) {
+      const key = `${i},${j}`;
+      if (cellLayers.has(key)) continue; // Already rendered
 
-  const iMin = Math.min(nw.i, se.i);
-  const iMax = Math.max(nw.i, se.i);
-  const jMin = Math.min(nw.j, se.j);
-  const jMax = Math.max(nw.j, se.j);
+      const cellBounds = leaflet.latLngBounds([
+        [
+          CLASSROOM_LATLNG.lat + i * TILE_DEGREES,
+          CLASSROOM_LATLNG.lng + j * TILE_DEGREES,
+        ],
+        [
+          CLASSROOM_LATLNG.lat + (i + 1) * TILE_DEGREES,
+          CLASSROOM_LATLNG.lng + (j + 1) * TILE_DEGREES,
+        ],
+      ]);
 
-  for (let i = iMin; i <= iMax; i++) {
-    for (let j = jMin; j <= jMax; j++) {
-      const rect = leaflet.rectangle(cellBounds(i, j), {
-        color: "#999",
+      const rect = leaflet.rectangle(cellBounds, {
+        color: "#3388ff",
         weight: 1,
-        fillOpacity: 0, // empty cells for now
+      }).addTo(map);
+
+      // Determine token for this cell
+      const token = getTokenForCell(i, j);
+
+      // Compute distance to player in grid cells
+      const distance = Math.max(Math.abs(i), Math.abs(j));
+
+      // Show token value if within NEIGHBORHOOD_SIZE
+      if (token && distance <= NEIGHBORHOOD_SIZE) {
+        const _valueMarker = leaflet.marker(
+          [
+            CLASSROOM_LATLNG.lat + (i + 0.5) * TILE_DEGREES,
+            CLASSROOM_LATLNG.lng + (j + 0.5) * TILE_DEGREES,
+          ],
+          {
+            icon: leaflet.divIcon({
+              className: "token-value",
+              html:
+                `<div style="text-align:center;font-weight:bold;color:black;">${token.value}</div>`,
+              iconSize: [TILE_DEGREES * 100000, TILE_DEGREES * 100000],
+            }),
+            interactive: false,
+          },
+        ).addTo(map);
+      }
+
+      // Add popup for collection
+      rect.bindPopup(() => {
+        const popupDiv = document.createElement("div");
+        if (token && distance <= NEIGHBORHOOD_SIZE) {
+          popupDiv.innerHTML = `
+            <div>Token at "${i},${j}" value <span id="value">${token.value}</span></div>
+            <button id="collect">Collect</button>
+          `;
+          popupDiv.querySelector<HTMLButtonElement>("#collect")!
+            .addEventListener("click", () => {
+              tokensMap.delete(key);
+              playerPoints += token.value;
+              statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
+              popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+                "0";
+            });
+        } else {
+          popupDiv.innerHTML = "<div>No token or too far to interact.</div>";
+        }
+        return popupDiv;
       });
 
-      // Optional: label cell coordinates
-      rect.bindTooltip(`Cell ${i},${j}`);
-
-      rect.addTo(gridLayer);
+      cellLayers.set(key, rect);
     }
   }
 }
 
-// A dedicated layer for grid rectangles
-const gridLayer = leaflet.layerGroup().addTo(map);
+// Initial render
+renderGrid();
 
-// Draw grid initially
-drawVisibleGrid();
-
-// Redraw grid whenever the map moves
-map.on("move", drawVisibleGrid);
-map.on("moveend", drawVisibleGrid);
+// Update grid on map move/pan
+map.on("moveend", () => {
+  renderGrid();
+});
