@@ -25,7 +25,7 @@ const CLASSROOM_LATLNG = leaflet.latLng(
 );
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 1e-4;
-const NEIGHBORHOOD_SIZE = 3; // Nearby cells to show values
+const NEIGHBORHOOD_SIZE = 3; // Nearby cells that can be interacted with / show token values
 const CACHE_SPAWN_PROBABILITY = 0.1;
 
 // ------------------- Map Setup -------------------
@@ -51,8 +51,23 @@ const playerMarker = leaflet.marker(CLASSROOM_LATLNG).bindTooltip(
 );
 playerMarker.addTo(map);
 
-let playerPoints = 0;
 statusPanelDiv.innerHTML = "No points yet...";
+
+// ------------------- Inventory -------------------
+let heldToken: Token | null = null;
+
+const inventoryDiv = document.createElement("div");
+inventoryDiv.id = "inventoryPanel";
+inventoryDiv.style.marginTop = "10px";
+inventoryDiv.style.fontWeight = "bold";
+inventoryDiv.innerText = "Holding: None";
+controlPanelDiv.appendChild(inventoryDiv);
+
+function updateInventoryUI() {
+  inventoryDiv.innerText = heldToken
+    ? `Holding: ${heldToken.value}`
+    : "Holding: None";
+}
 
 // ------------------- Token Definitions -------------------
 type Token = {
@@ -60,24 +75,32 @@ type Token = {
   i: number;
   j: number;
 };
+
 const tokensMap = new Map<string, Token>();
+const valueMarkers = new Map<string, leaflet.Marker>();
 
-function getTokenForCell(i: number, j: number): Token | null {
-  const key = `${i},${j}`;
-  if (tokensMap.has(key)) return tokensMap.get(key)!;
-
-  const spawnChance = luck([i, j, "initialValue"].toString());
-  if (spawnChance < CACHE_SPAWN_PROBABILITY) {
-    const value = 1 << Math.floor(luck([i, j, "tokenValue"].toString()) * 4);
-    const token: Token = { value, i, j };
-    tokensMap.set(key, token);
-    return token;
+// ------------------- Spawn initial deterministic tokens -------------------
+for (let i = -NEIGHBORHOOD_SIZE; i <= NEIGHBORHOOD_SIZE; i++) {
+  for (let j = -NEIGHBORHOOD_SIZE; j <= NEIGHBORHOOD_SIZE; j++) {
+    const spawnChance = luck([i, j, "initialValue"].toString());
+    if (spawnChance < CACHE_SPAWN_PROBABILITY) {
+      const token: Token = {
+        value: 1 << Math.floor(luck([i, j, "tokenValue"].toString()) * 4), // 1,2,4,8
+        i,
+        j,
+      };
+      tokensMap.set(`${i},${j}`, token);
+    }
   }
-  return null;
 }
 
 // ------------------- Dynamic Grid Rendering -------------------
 const cellLayers = new Map<string, leaflet.Layer>();
+
+function getTokenForCell(i: number, j: number): Token | null {
+  const key = `${i},${j}`;
+  return tokensMap.get(key) ?? null; // Do not regenerate once removed
+}
 
 function renderGrid() {
   const bounds = map.getBounds();
@@ -97,72 +120,112 @@ function renderGrid() {
   for (let i = minI; i <= maxI; i++) {
     for (let j = minJ; j <= maxJ; j++) {
       const key = `${i},${j}`;
-      if (cellLayers.has(key)) continue; // Already rendered
-
-      const cellBounds = leaflet.latLngBounds([
-        [
-          CLASSROOM_LATLNG.lat + i * TILE_DEGREES,
-          CLASSROOM_LATLNG.lng + j * TILE_DEGREES,
-        ],
-        [
-          CLASSROOM_LATLNG.lat + (i + 1) * TILE_DEGREES,
-          CLASSROOM_LATLNG.lng + (j + 1) * TILE_DEGREES,
-        ],
-      ]);
-
-      const rect = leaflet.rectangle(cellBounds, {
-        color: "#3388ff",
-        weight: 1,
-      }).addTo(map);
-
-      // Determine token for this cell
-      const token = getTokenForCell(i, j);
-
-      // Compute distance to player in grid cells
       const distance = Math.max(Math.abs(i), Math.abs(j));
+      const color = distance <= NEIGHBORHOOD_SIZE ? "yellow" : "#3388ff";
 
-      // Show token value if within NEIGHBORHOOD_SIZE
-      if (token && distance <= NEIGHBORHOOD_SIZE) {
-        const _valueMarker = leaflet.marker(
+      // Get or create rectangle
+      let rect: leaflet.Rectangle;
+      if (cellLayers.has(key)) {
+        rect = cellLayers.get(key)! as leaflet.Rectangle;
+        rect.setStyle({ color });
+      } else {
+        const cellBounds = leaflet.latLngBounds([
           [
-            CLASSROOM_LATLNG.lat + (i + 0.5) * TILE_DEGREES,
-            CLASSROOM_LATLNG.lng + (j + 0.5) * TILE_DEGREES,
+            CLASSROOM_LATLNG.lat + i * TILE_DEGREES,
+            CLASSROOM_LATLNG.lng + j * TILE_DEGREES,
           ],
-          {
-            icon: leaflet.divIcon({
-              className: "token-value",
-              html:
-                `<div style="text-align:center;font-weight:bold;color:black;">${token.value}</div>`,
-              iconSize: [TILE_DEGREES * 100000, TILE_DEGREES * 100000],
-            }),
-            interactive: false,
-          },
-        ).addTo(map);
+          [
+            CLASSROOM_LATLNG.lat + (i + 1) * TILE_DEGREES,
+            CLASSROOM_LATLNG.lng + (j + 1) * TILE_DEGREES,
+          ],
+        ]);
+        rect = leaflet.rectangle(cellBounds, { color, weight: 1 }).addTo(map);
+        cellLayers.set(key, rect);
+
+        // Bind popup for token collection or placement
+        rect.bindPopup(() => {
+          const popupDiv = document.createElement("div");
+          const token = getTokenForCell(i, j);
+
+          if (distance > NEIGHBORHOOD_SIZE) {
+            popupDiv.innerHTML =
+              "<div>Too far to interact with this token.</div>";
+            return popupDiv;
+          }
+
+          if (token && !heldToken) {
+            popupDiv.innerHTML = `
+              <div>Token at "${i},${j}" value <span id="value">${token.value}</span></div>
+              <button id="collect">Collect</button>
+            `;
+            popupDiv.querySelector<HTMLButtonElement>("#collect")!
+              .addEventListener("click", () => {
+                // Remove token from map and markers
+                tokensMap.delete(key);
+                if (valueMarkers.has(key)) {
+                  map.removeLayer(valueMarkers.get(key)!);
+                  valueMarkers.delete(key);
+                }
+
+                // Pick up token
+                heldToken = token;
+                updateInventoryUI();
+
+                rect.closePopup();
+                renderGrid();
+              });
+          } else if (!token && heldToken) {
+            popupDiv.innerHTML = `
+              <div>Place your held token of value ${heldToken.value} here.</div>
+              <button id="place">Place</button>
+            `;
+            popupDiv.querySelector<HTMLButtonElement>("#place")!
+              .addEventListener("click", () => {
+                const placedToken: Token = { value: heldToken!.value, i, j };
+                tokensMap.set(key, placedToken as Token);
+                heldToken = null;
+                updateInventoryUI();
+
+                rect.closePopup();
+                renderGrid();
+              });
+          } else if (token && heldToken) {
+            popupDiv.innerHTML =
+              `<div>Token at "${i},${j}" value ${token.value}. You are already holding a token (${heldToken.value}).</div>`;
+          } else {
+            popupDiv.innerHTML =
+              `<div>No token here. You are holding nothing.</div>`;
+          }
+
+          return popupDiv;
+        });
       }
 
-      // Add popup for collection
-      rect.bindPopup(() => {
-        const popupDiv = document.createElement("div");
-        if (token && distance <= NEIGHBORHOOD_SIZE) {
-          popupDiv.innerHTML = `
-            <div>Token at "${i},${j}" value <span id="value">${token.value}</span></div>
-            <button id="collect">Collect</button>
-          `;
-          popupDiv.querySelector<HTMLButtonElement>("#collect")!
-            .addEventListener("click", () => {
-              tokensMap.delete(key);
-              playerPoints += token.value;
-              statusPanelDiv.innerHTML = `${playerPoints} points accumulated`;
-              popupDiv.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-                "0";
-            });
-        } else {
-          popupDiv.innerHTML = "<div>No token or too far to interact.</div>";
+      // Add/update token value marker
+      const token = getTokenForCell(i, j);
+      if (token && distance <= NEIGHBORHOOD_SIZE) {
+        if (!valueMarkers.has(key)) {
+          const valueMarker = leaflet.marker(
+            [
+              CLASSROOM_LATLNG.lat + (i + 0.5) * TILE_DEGREES,
+              CLASSROOM_LATLNG.lng + (j + 0.5) * TILE_DEGREES,
+            ],
+            {
+              icon: leaflet.divIcon({
+                className: "token-value",
+                html:
+                  `<div style="text-align:center;font-weight:bold;color:black;">${token.value}</div>`,
+                iconSize: [TILE_DEGREES * 100000, TILE_DEGREES * 100000],
+              }),
+              interactive: false,
+            },
+          ).addTo(map);
+          valueMarkers.set(key, valueMarker);
         }
-        return popupDiv;
-      });
-
-      cellLayers.set(key, rect);
+      } else if (valueMarkers.has(key)) {
+        map.removeLayer(valueMarkers.get(key)!);
+        valueMarkers.delete(key);
+      }
     }
   }
 }
@@ -170,7 +233,7 @@ function renderGrid() {
 // Initial render
 renderGrid();
 
-// Update grid on map move/pan
+// Re-render grid when map is panned
 map.on("moveend", () => {
   renderGrid();
 });

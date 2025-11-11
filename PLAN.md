@@ -17,8 +17,14 @@ PHASE 2: TOKEN CONSISTENCY
 [X] Ensure token text is visible in cells without interaction
 
 PHASE 3: PLAYER INTERACTION (proximity interaction)
-[] Use player location as center point
-[] Determine whether cell is within interaction radius (3 cells) of center point
-[] Visually distinguish interactable cells by highlighting them yellow and leaving the other cells as they are
+[X] Use player location as center point
+[X] Determine whether cell is within interaction radius (3 cells) of center point
+[X] Visually distinguish interactable cells by highlighting them yellow and leaving the other cells as they are
 [] Dynamically update visible interactable cells when player moves
-[] Ensure distant cells cannot be interacted with
+[X] Ensure distant cells cannot be interacted with
+
+PHASE 4: INVENTORY SYSTEM
+[X] Store whether player is holding a toeken
+[X] Store token value if present
+[X] Display inventory state on screen
+[X] When a player clicks a close enough cell, if their inventory is empty remove the token from the cell and place it in the inventory and update stored state
