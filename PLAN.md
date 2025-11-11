@@ -28,3 +28,9 @@ PHASE 4: INVENTORY SYSTEM
 [X] Store token value if present
 [X] Display inventory state on screen
 [X] When a player clicks a close enough cell, if their inventory is empty remove the token from the cell and place it in the inventory and update stored state
+
+PHASE 5: CRAFTING
+[X] When clicking a cell with a token. If the player has a token of equal value in inventory:
+[X] Remove existing cell token and inventory token
+[X] Generate new token in grid cell with doubled value
+[X] Inventory should be empty after succesful craft

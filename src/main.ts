@@ -78,6 +78,7 @@ type Token = {
 
 const tokensMap = new Map<string, Token>();
 const valueMarkers = new Map<string, leaflet.Marker>();
+const cellLayers = new Map<string, leaflet.Layer>();
 
 // ------------------- Spawn initial deterministic tokens -------------------
 for (let i = -NEIGHBORHOOD_SIZE; i <= NEIGHBORHOOD_SIZE; i++) {
@@ -94,14 +95,13 @@ for (let i = -NEIGHBORHOOD_SIZE; i <= NEIGHBORHOOD_SIZE; i++) {
   }
 }
 
-// ------------------- Dynamic Grid Rendering -------------------
-const cellLayers = new Map<string, leaflet.Layer>();
-
+// ------------------- Token Utilities -------------------
 function getTokenForCell(i: number, j: number): Token | null {
   const key = `${i},${j}`;
   return tokensMap.get(key) ?? null; // Do not regenerate once removed
 }
 
+// ------------------- Render Grid -------------------
 function renderGrid() {
   const bounds = map.getBounds();
   const minI = Math.floor(
@@ -142,7 +142,6 @@ function renderGrid() {
         rect = leaflet.rectangle(cellBounds, { color, weight: 1 }).addTo(map);
         cellLayers.set(key, rect);
 
-        // Bind popup for token collection or placement
         rect.bindPopup(() => {
           const popupDiv = document.createElement("div");
           const token = getTokenForCell(i, j);
@@ -153,6 +152,7 @@ function renderGrid() {
             return popupDiv;
           }
 
+          // ------------------- Collect -------------------
           if (token && !heldToken) {
             popupDiv.innerHTML = `
               <div>Token at "${i},${j}" value <span id="value">${token.value}</span></div>
@@ -160,38 +160,109 @@ function renderGrid() {
             `;
             popupDiv.querySelector<HTMLButtonElement>("#collect")!
               .addEventListener("click", () => {
-                // Remove token from map and markers
                 tokensMap.delete(key);
                 if (valueMarkers.has(key)) {
                   map.removeLayer(valueMarkers.get(key)!);
                   valueMarkers.delete(key);
                 }
 
-                // Pick up token
                 heldToken = token;
                 updateInventoryUI();
 
                 rect.closePopup();
                 renderGrid();
               });
-          } else if (!token && heldToken) {
-            popupDiv.innerHTML = `
-              <div>Place your held token of value ${heldToken.value} here.</div>
-              <button id="place">Place</button>
-            `;
-            popupDiv.querySelector<HTMLButtonElement>("#place")!
-              .addEventListener("click", () => {
-                const placedToken: Token = { value: heldToken!.value, i, j };
-                tokensMap.set(key, placedToken as Token);
-                heldToken = null;
-                updateInventoryUI();
 
-                rect.closePopup();
-                renderGrid();
-              });
-          } else if (token && heldToken) {
-            popupDiv.innerHTML =
-              `<div>Token at "${i},${j}" value ${token.value}. You are already holding a token (${heldToken.value}).</div>`;
+            // ------------------- Craft -------------------
+          } else if (heldToken) {
+            if (token && token.value === heldToken.value) {
+              popupDiv.innerHTML = `
+                <div>Token at "${i},${j}" value ${token.value}. Place your token to craft!</div>
+                <button id="craft">Craft</button>
+              `;
+              popupDiv.querySelector<HTMLButtonElement>("#craft")!
+                .addEventListener("click", () => {
+                  // Merge tokens to create new token of double value
+                  const newValue = token.value * 2;
+                  const craftedToken: Token = { value: newValue, i, j };
+                  tokensMap.set(key, craftedToken as Token);
+
+                  // Update value marker immediately
+                  if (valueMarkers.has(key)) {
+                    map.removeLayer(valueMarkers.get(key)!);
+                    valueMarkers.delete(key);
+                  }
+                  const valueMarker = leaflet.marker(
+                    [
+                      CLASSROOM_LATLNG.lat + (i + 0.5) * TILE_DEGREES,
+                      CLASSROOM_LATLNG.lng + (j + 0.5) * TILE_DEGREES,
+                    ],
+                    {
+                      icon: leaflet.divIcon({
+                        className: "token-value",
+                        html:
+                          `<div style="text-align:center;font-weight:bold;color:black;">${craftedToken.value}</div>`,
+                        iconSize: [
+                          TILE_DEGREES * 100000,
+                          TILE_DEGREES * 100000,
+                        ],
+                      }),
+                      interactive: false,
+                    },
+                  ).addTo(map);
+                  valueMarkers.set(key, valueMarker);
+
+                  heldToken = null;
+                  updateInventoryUI();
+
+                  rect.closePopup();
+                });
+
+              // ------------------- Place on empty cell -------------------
+            } else if (!token) {
+              popupDiv.innerHTML = `
+                <div>Place your held token of value ${heldToken.value} here.</div>
+                <button id="place">Place</button>
+              `;
+              popupDiv.querySelector<HTMLButtonElement>("#place")!
+                .addEventListener("click", () => {
+                  const placedToken: Token = { value: heldToken!.value, i, j };
+                  tokensMap.set(key, placedToken as Token);
+
+                  // Update value marker immediately
+                  if (valueMarkers.has(key)) {
+                    map.removeLayer(valueMarkers.get(key)!);
+                    valueMarkers.delete(key);
+                  }
+                  const valueMarker = leaflet.marker(
+                    [
+                      CLASSROOM_LATLNG.lat + (i + 0.5) * TILE_DEGREES,
+                      CLASSROOM_LATLNG.lng + (j + 0.5) * TILE_DEGREES,
+                    ],
+                    {
+                      icon: leaflet.divIcon({
+                        className: "token-value",
+                        html:
+                          `<div style="text-align:center;font-weight:bold;color:black;">${placedToken.value}</div>`,
+                        iconSize: [
+                          TILE_DEGREES * 100000,
+                          TILE_DEGREES * 100000,
+                        ],
+                      }),
+                      interactive: false,
+                    },
+                  ).addTo(map);
+                  valueMarkers.set(key, valueMarker);
+
+                  heldToken = null;
+                  updateInventoryUI();
+
+                  rect.closePopup();
+                });
+            } else {
+              popupDiv.innerHTML =
+                `<div>Token at "${i},${j}" value ${token.value}. You are holding a token (${heldToken.value}).</div>`;
+            }
           } else {
             popupDiv.innerHTML =
               `<div>No token here. You are holding nothing.</div>`;
@@ -201,28 +272,28 @@ function renderGrid() {
         });
       }
 
-      // Add/update token value marker
+      // ------------------- Value markers -------------------
       const token = getTokenForCell(i, j);
-      if (token && distance <= NEIGHBORHOOD_SIZE) {
-        if (!valueMarkers.has(key)) {
-          const valueMarker = leaflet.marker(
-            [
-              CLASSROOM_LATLNG.lat + (i + 0.5) * TILE_DEGREES,
-              CLASSROOM_LATLNG.lng + (j + 0.5) * TILE_DEGREES,
-            ],
-            {
-              icon: leaflet.divIcon({
-                className: "token-value",
-                html:
-                  `<div style="text-align:center;font-weight:bold;color:black;">${token.value}</div>`,
-                iconSize: [TILE_DEGREES * 100000, TILE_DEGREES * 100000],
-              }),
-              interactive: false,
-            },
-          ).addTo(map);
-          valueMarkers.set(key, valueMarker);
-        }
-      } else if (valueMarkers.has(key)) {
+      if (token && distance <= NEIGHBORHOOD_SIZE && !valueMarkers.has(key)) {
+        const valueMarker = leaflet.marker(
+          [
+            CLASSROOM_LATLNG.lat + (i + 0.5) * TILE_DEGREES,
+            CLASSROOM_LATLNG.lng + (j + 0.5) * TILE_DEGREES,
+          ],
+          {
+            icon: leaflet.divIcon({
+              className: "token-value",
+              html:
+                `<div style="text-align:center;font-weight:bold;color:black;">${token.value}</div>`,
+              iconSize: [TILE_DEGREES * 100000, TILE_DEGREES * 100000],
+            }),
+            interactive: false,
+          },
+        ).addTo(map);
+        valueMarkers.set(key, valueMarker);
+      } else if (
+        (!token || distance > NEIGHBORHOOD_SIZE) && valueMarkers.has(key)
+      ) {
         map.removeLayer(valueMarkers.get(key)!);
         valueMarkers.delete(key);
       }
