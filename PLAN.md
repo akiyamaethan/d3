@@ -36,7 +36,7 @@ PHASE 5: CRAFTING
 [X] Inventory should be empty after succesful craft
 
 -D3B
-PHASE 6: PLAYER MOVEMENT
+PHASE 1: PLAYER MOVEMENT
 [X] Refactor grid cells to originate from Null Island
 [X] Implement functions for lat/long to grid indices
 [X] Ensure token consistency again
@@ -44,13 +44,13 @@ PHASE 6: PLAYER MOVEMENT
 [X] Update player position and recenter map after each move
 [X] Maintain dynamic rendering of grid cells
 
-PHASE 7: TOKEN REFACTOR
-[] Implement grid cell data type to separate logical cells from leaflet layers
-[] Ensure off-screen cells are forgotten to enable farming
-[] Ensure cells are still spawning/despawning as necessary
+PHASE 2: TOKEN REFACTOR
+[X] Implement grid cell data type to separate logical cells from leaflet layers
+[X] Ensure off-screen cells are forgotten to enable farming
+[X] Ensure cells are still spawning/despawning as necessary
 
-PHASE 8: WIN CONDITION
-[] Set win threshold to 64 (for testing)
-[] Ensure crafting logic still functions and player can craft up to 64
-[] Display "You Win" if player crafts a 64 token
-[] Allow player to reset gamestate after victory
+PHASE 3: WIN CONDITION
+[X] Set win threshold to 64 (for testing)
+[X] Ensure crafting logic still functions and player can craft up to 64
+[X] Display "You Win" if player crafts a 64 token
+[X] Allow player to reset gamestate after victory
