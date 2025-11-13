@@ -54,3 +54,12 @@ PHASE 3: WIN CONDITION
 [X] Ensure crafting logic still functions and player can craft up to 64
 [X] Display "You Win" if player crafts a 64 token
 [X] Allow player to reset gamestate after victory
+
+-D3C
+PHASE 1: REFACTOR
+[X] Implement flyweight pattern to cells
+[X] Implement memento pattern to cells
+
+PHASE 2: SANITY CHECK
+[] Test for expected behavior
+[] Fix anything that may have broke
