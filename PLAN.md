@@ -61,5 +61,5 @@ PHASE 1: REFACTOR
 [X] Implement memento pattern to cells
 
 PHASE 2: SANITY CHECK
-[] Test for expected behavior
-[] Fix anything that may have broke
+[X] Test for expected behavior
+[X] Fix anything that may have broke

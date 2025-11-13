@@ -41,7 +41,7 @@ const map = leaflet.map(mapDiv, {
   keyboard: false,
 });
 
-const _baseTile = leaflet
+const baseTile = leaflet
   .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution:
@@ -135,11 +135,6 @@ function getCellTokenValue(i: number, j: number): number | null {
 function setCellTokenValue(i: number, j: number, tokenValue: number | null) {
   const key = cellKey(i, j);
   modifiedCells.set(key, { tokenValue });
-}
-
-// Remove a persisted modification (rarely used) - keeps flyweight behavior
-function _forgetCell(i: number, j: number) {
-  modifiedCells.delete(cellKey(i, j));
 }
 
 // ------------------- Victory UI -------------------
@@ -415,28 +410,24 @@ function resetGame() {
   heldToken = null;
   updateInventoryUI();
 
-  // clear visual layers and markers
-  for (const [_k, layer] of cellLayers.entries()) {
-    map.removeLayer(layer);
-  }
+  // Clear logical + visual state
+  modifiedCells.clear();
   cellLayers.clear();
-  for (const [_k, m] of valueMarkers.entries()) {
-    map.removeLayer(m);
-  }
   valueMarkers.clear();
 
-  // keep modifiedCells mementos cleared for a true restart
-  modifiedCells.clear();
-
-  // remove everything except base tile layer
+  // Remove everything except the base map
   map.eachLayer((layer) => {
-    if (layer instanceof leaflet.TileLayer) return; // keep base map
+    if (layer === baseTile) return; // ✅ keep base map
     map.removeLayer(layer);
   });
 
+  // Reset player
   playerLat = START_LAT;
   playerLng = START_LNG;
   playerMarker.addTo(map);
+  updatePlayerMarker();
+
+  // Redraw map state
   renderGrid();
 }
 
