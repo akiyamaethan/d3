@@ -63,3 +63,24 @@ PHASE 1: REFACTOR
 PHASE 2: SANITY CHECK
 [X] Test for expected behavior
 [X] Fix anything that may have broke
+
+-D3D
+PHASE 1: REAL-WORLD PLAYER MOVEMENT
+[X] Integrate browser Geolocation API to control player movement based on actual device location
+[X] Implement facade pattern for movement
+[X] Provide runtime option to switch between button-based and geolocation-based movement
+
+PHASE 2: PERSISTENCE ACROSS SESSIONS
+[] Use browser localStorage API to persist modified cells and player state
+[] On page load, restore game state from localStorage if available
+
+PHASE 3: NEW GAME / RESET
+[] Provide a way for the player to start a new game
+[] Ensure that switching between movement modes does not require a page reload
+[] Reset player position, inventory, and modified cells appropriately when starting a new game
+
+PHASE 4: SANITY CHECK
+[] Verify that moving the device updates player position correctly on the map
+[] Verify that inventory and tokens behave correctly after reloading the page
+[] Ensure crafting and token collection still function with geolocation-based movement
+[] Test persistence of modified cells and player state across page reloads
