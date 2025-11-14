@@ -1,3 +1,4 @@
+// deno-lint-ignore-file
 // @deno-types="npm:@types/leaflet"
 import leaflet from "leaflet";
 import "leaflet/dist/leaflet.css";
