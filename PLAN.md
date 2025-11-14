@@ -71,8 +71,8 @@ PHASE 1: REAL-WORLD PLAYER MOVEMENT
 [X] Provide runtime option to switch between button-based and geolocation-based movement
 
 PHASE 2: PERSISTENCE ACROSS SESSIONS
-[] Use browser localStorage API to persist modified cells and player state
-[] On page load, restore game state from localStorage if available
+[X] Use browser localStorage API to persist modified cells and player state
+[X] On page load, restore game state from localStorage if available
 
 PHASE 3: NEW GAME / RESET
 [] Provide a way for the player to start a new game
