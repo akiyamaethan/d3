@@ -75,9 +75,9 @@ PHASE 2: PERSISTENCE ACROSS SESSIONS
 [X] On page load, restore game state from localStorage if available
 
 PHASE 3: NEW GAME / RESET
-[] Provide a way for the player to start a new game
-[] Ensure that switching between movement modes does not require a page reload
-[] Reset player position, inventory, and modified cells appropriately when starting a new game
+[X] Provide a way for the player to start a new game
+[X] Ensure that switching between movement modes does not require a page reload
+[X] Reset player position, inventory, and modified cells appropriately when starting a new game
 
 PHASE 4: SANITY CHECK
 [] Verify that moving the device updates player position correctly on the map
