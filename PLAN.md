@@ -80,7 +80,7 @@ PHASE 3: NEW GAME / RESET
 [X] Reset player position, inventory, and modified cells appropriately when starting a new game
 
 PHASE 4: SANITY CHECK
-[] Verify that moving the device updates player position correctly on the map
-[] Verify that inventory and tokens behave correctly after reloading the page
-[] Ensure crafting and token collection still function with geolocation-based movement
-[] Test persistence of modified cells and player state across page reloads
+[X] Verify that moving the device updates player position correctly on the map
+[X] Verify that inventory and tokens behave correctly after reloading the page
+[X] Ensure crafting and token collection still function with geolocation-based movement
+[X] Test persistence of modified cells and player state across page reloads
